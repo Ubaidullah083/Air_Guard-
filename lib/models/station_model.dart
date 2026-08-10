@@ -27,7 +27,7 @@ class StationModel {
       name: info['name']?.toString() ?? 'Unknown Station',
       location: info['location']?.toString() ?? '',
       ownerId: info['owner']?.toString() ?? '',
-      isOnline: info['status']?.toString() == 'online',
+      isOnline: info['status']?.toString().trim().toLowerCase() == 'online',
       lastSeen: info['lastSeen'] != null
           ? DateTime.tryParse(info['lastSeen'].toString())
           : null,

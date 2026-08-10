@@ -10,6 +10,13 @@ class FirebaseService {
 
   final _db = FirebaseDatabase.instance;
 
+  // ── Get station data once (not a stream) ─────────────
+  Future<StationModel?> getStationOnce(String stationId) async {
+    final snap = await _stationRef(stationId).get();
+    if (!snap.exists) return null;
+    return StationModel.fromMap(stationId, snap.value as Map);
+  }
+
   // ── Station refs ─────────────────────────────────────
   DatabaseReference _stationRef(String id) => _db.ref('stations/$id');
   DatabaseReference _stationInfoRef(String id) => _db.ref('stations/$id/info');
@@ -121,8 +128,57 @@ class FirebaseService {
   }
 
   // ── Remove station ────────────────────────────────────
+  // ── Soft delete — moves to recycle bin ───────────────
   Future<void> removeStation(String stationId) async {
+    // 1. Read all current station data
+    final snap = await _stationRef(stationId).get();
+    if (!snap.exists) return;
+
+    final data = snap.value as Map;
+
+    // 2. Copy to recycle bin with deletion timestamp
+    await _db.ref('recycle_bin/$stationId').set({
+      ...data,
+      'deletedAt': DateTime.now().toIso8601String(),
+      'originalId': stationId,
+    });
+
+    // 3. Remove from active stations
     await _stationRef(stationId).remove();
+  }
+
+  // ── Restore from recycle bin ──────────────────────────
+  Future<void> restoreStation(String stationId) async {
+    final snap = await _db.ref('recycle_bin/$stationId').get();
+    if (!snap.exists) return;
+
+    final data = snap.value as Map;
+
+    // Move back to stations
+    await _stationRef(stationId).set(data);
+
+    // Remove from recycle bin
+    await _db.ref('recycle_bin/$stationId').remove();
+  }
+
+  // ── Get recycle bin contents ──────────────────────────
+  Future<List<Map<String, dynamic>>> getRecycleBin(String userId) async {
+    final snap = await _db.ref('recycle_bin').get();
+    if (!snap.exists) return [];
+
+    final data = snap.value as Map;
+    return data.entries
+        .where((e) {
+          final info = (e.value as Map?)?['info'] as Map?;
+          return info?['owner']?.toString() == userId;
+        })
+        .map(
+          (e) => {
+            'id': e.key.toString(),
+            ...Map<String, dynamic>.from(e.value as Map),
+          },
+        )
+        .toList();
   }
 
   // ── Rename station ────────────────────────────────────

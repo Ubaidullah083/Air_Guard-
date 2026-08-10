@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:lottie/lottie.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/constants/sensor_constants.dart';
 import '../../core/widgets/animated_background.dart';
@@ -14,59 +15,62 @@ class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final stationsAsync = ref.watch(stationsProvider);
-    final selectedId = ref.watch(selectedStationIdProvider);
-    final selectedAsync = ref.watch(selectedStationProvider);
-    final readingAsync = ref.watch(latestReadingProvider);
-    final alertCount = ref.watch(alertCountProvider);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+Widget build(BuildContext context, WidgetRef ref) {
+  final stationsAsync = ref.watch(stationsProvider);
+  final selectedId    = ref.watch(selectedStationIdProvider);
+  final selectedAsync = ref.watch(selectedStationProvider);
+  final readingAsync  = ref.watch(latestReadingProvider);
+  final alertCount    = ref.watch(alertCountProvider);
+  final isDark        = Theme.of(context).brightness == Brightness.dark;
 
-    // Auto select first station
-    ref.watch(autoSelectProvider);
+  ref.watch(autoSelectProvider);
 
-    // Compute overall AQI level from latest reading
-    final reading = readingAsync.value;
-    final station = selectedAsync.value;
-    final aqiLevel = _computeAqi(reading, station);
+  final reading  = readingAsync.value;
+  final station  = selectedAsync.value;
+  final aqiLevel = _computeAqi(reading, station);
 
-    return AnimatedBackground(
-      aqiLevel: aqiLevel,
-      child: Scaffold(
-        backgroundColor: Colors.transparent,
-        body: SafeArea(
-          child: stationsAsync.when(
-            loading: () => const Center(child: CircularProgressIndicator()),
-            error: (e, _) => Center(child: Text('Error: $e')),
-            data: (stations) {
-              if (stations.isEmpty) {
-                return _EmptyState(
-                  onAdd: () => context.push('/settings/devices'),
-                );
-              }
-              return _DashboardBody(
-                stations: stations,
-                selectedId: selectedId,
-                station: station,
-                reading: reading,
-                aqiLevel: aqiLevel,
-                alertCount: alertCount,
-                isDark: isDark,
-                ref: ref,
-              );
-            },
-          ),
+  // ✅ Write AQI level globally so ALL screens use it
+  Future.microtask(() =>
+      ref.read(globalAqiLevelProvider.notifier).state = aqiLevel);
+
+  return AnimatedBackground(
+    aqiLevel: aqiLevel,
+    child: Scaffold(
+      backgroundColor: Colors.transparent,
+      body: SafeArea(
+        child: stationsAsync.when(
+          loading: () =>
+              const Center(child: CircularProgressIndicator()),
+          error: (e, _) => Center(child: Text('Error: $e')),
+          data: (stations) {
+            if (stations.isEmpty) {
+              return _EmptyState(
+                  onAdd: () => context.push('/settings/devices'));
+            }
+            return _DashboardBody(
+              stations:   stations,
+              selectedId: selectedId,
+              station:    station,
+              reading:    reading,
+              aqiLevel:   aqiLevel,
+              alertCount: alertCount,
+              isDark:     isDark,
+              ref:        ref,
+            );
+          },
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   AirQualityLevel _computeAqi(
     SensorReadingModel? reading,
     StationModel? station,
   ) {
-    if (reading == null || station == null) return AirQualityLevel.offline;
-
+    if (reading == null || station == null) {
+      return AirQualityLevel.offline;
+    }
     AirQualityLevel worst = AirQualityLevel.good;
     for (final sensor in SensorConstants.sensors) {
       if (!sensor.isActive) continue;
@@ -84,7 +88,7 @@ class DashboardScreen extends ConsumerWidget {
   }
 }
 
-// ── Main body ─────────────────────────────────────────────────────────
+// ── Dashboard body ────────────────────────────────────────────────────
 class _DashboardBody extends ConsumerWidget {
   final List<StationModel> stations;
   final String? selectedId;
@@ -130,7 +134,7 @@ class _DashboardBody extends ConsumerWidget {
           ),
         ),
         ..._buildSensorGroups(context),
-        const SliverToBoxAdapter(child: SizedBox(height: 20)),
+        const SliverToBoxAdapter(child: SizedBox(height: 24)),
       ],
     );
   }
@@ -161,7 +165,7 @@ class _DashboardBody extends ConsumerWidget {
               crossAxisCount: 2,
               mainAxisSpacing: 8,
               crossAxisSpacing: 8,
-              childAspectRatio: 1.15,
+              childAspectRatio: 1.1,
             ),
             delegate: SliverChildBuilderDelegate(
               (context, i) => _SensorCard(
@@ -204,8 +208,7 @@ class _Header extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
       child: Row(
         children: [
-          // Logo + title
-          Icon(Icons.cloud, color: AppColors.primary, size: 22),
+          const Icon(Icons.cloud, color: AppColors.primary, size: 22),
           const SizedBox(width: 8),
           Text(
             'Air Guard',
@@ -216,8 +219,6 @@ class _Header extends StatelessWidget {
             ),
           ),
           const Spacer(),
-
-          // Station switcher dropdown
           GestureDetector(
             onTap: () => _showStationPicker(context),
             child: Container(
@@ -333,7 +334,11 @@ class _Header extends StatelessWidget {
                   ),
                 ),
                 trailing: s.id == selectedId
-                    ? Icon(Icons.check_circle, color: AppColors.good, size: 18)
+                    ? const Icon(
+                        Icons.check_circle,
+                        color: AppColors.good,
+                        size: 18,
+                      )
                     : null,
                 onTap: () {
                   ref.read(selectedStationIdProvider.notifier).state = s.id;
@@ -348,7 +353,7 @@ class _Header extends StatelessWidget {
   }
 }
 
-// ── AGI banner card ───────────────────────────────────────────────────
+// ── AGI card with Lottie character ────────────────────────────────────
 class _AgiCard extends StatelessWidget {
   final AirQualityLevel aqiLevel;
   final StationModel? station;
@@ -364,6 +369,54 @@ class _AgiCard extends StatelessWidget {
     required this.isDark,
   });
 
+  // ── Lottie asset per level ──────────────────────────
+  String? get _lottiePath {
+    switch (aqiLevel) {
+      case AirQualityLevel.good:
+        return 'lib/assets/animations/aqi_good.json';
+      case AirQualityLevel.moderate:
+        return 'lib/assets/animations/aqi_moderate.json';
+      case AirQualityLevel.warning:
+        return 'lib/assets/animations/aqi_warning.json';
+      case AirQualityLevel.critical:
+        return 'lib/assets/animations/aqi_critical.json';
+      case AirQualityLevel.offline:
+        return null; // no animation when offline
+    }
+  }
+
+  // ── Plain English label ─────────────────────────────
+  String get _plainLabel {
+    switch (aqiLevel) {
+      case AirQualityLevel.good:
+        return 'Air is Clean 😊';
+      case AirQualityLevel.moderate:
+        return 'Acceptable Air 😐';
+      case AirQualityLevel.warning:
+        return 'Unhealthy Air 😷';
+      case AirQualityLevel.critical:
+        return 'Hazardous Air ☠️';
+      case AirQualityLevel.offline:
+        return 'No Data Available';
+    }
+  }
+
+  // ── User advice ─────────────────────────────────────
+  String get _advice {
+    switch (aqiLevel) {
+      case AirQualityLevel.good:
+        return 'Safe for everyone. Enjoy outdoor activities!';
+      case AirQualityLevel.moderate:
+        return 'Sensitive groups should limit outdoor time.';
+      case AirQualityLevel.warning:
+        return 'Wear a mask outside. Reduce exertion.';
+      case AirQualityLevel.critical:
+        return 'Stay indoors. Use air filtration immediately.';
+      case AirQualityLevel.offline:
+        return 'Check device connection.';
+    }
+  }
+
   int get _agiScore {
     if (reading == null) return 0;
     switch (aqiLevel) {
@@ -372,7 +425,7 @@ class _AgiCard extends StatelessWidget {
       case AirQualityLevel.moderate:
         return 72;
       case AirQualityLevel.warning:
-        return 115;
+        return 125;
       case AirQualityLevel.critical:
         return 175;
       case AirQualityLevel.offline:
@@ -380,22 +433,25 @@ class _AgiCard extends StatelessWidget {
     }
   }
 
+  double get _progressValue {
+    return (_agiScore / 200).clamp(0.0, 1.0);
+  }
+
   @override
   Widget build(BuildContext context) {
     final color = AirQualityHelper.getColor(aqiLevel, dark: isDark);
     final bgColor = AirQualityHelper.getBgColor(aqiLevel, dark: isDark);
     final label = AirQualityHelper.getLabel(aqiLevel);
-    final advice = AirQualityHelper.getAdvice(aqiLevel);
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
       child: Container(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: isDark
               ? AppColors.darkCard
               : Colors.white.withValues(alpha: 0.60),
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(18),
           border: Border.all(
             color: isDark
                 ? AppColors.darkCardBorder
@@ -403,71 +459,277 @@ class _AgiCard extends StatelessWidget {
           ),
         ),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Status pill
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-              decoration: BoxDecoration(
-                color: bgColor,
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 6,
-                    height: 6,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: color,
-                    ),
+            // ── Top row: label + status pill ──────────
+            Row(
+              children: [
+                Text(
+                  'AIR GUARD INDEX',
+                  style: TextStyle(
+                    fontSize: 9,
+                    fontWeight: FontWeight.w700,
+                    color: isDark
+                        ? AppColors.darkSubtext
+                        : AppColors.lightSubtext,
+                    letterSpacing: 0.1,
                   ),
-                  const SizedBox(width: 5),
+                ),
+                const Spacer(),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 3,
+                  ),
+                  decoration: BoxDecoration(
+                    color: bgColor,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 5,
+                        height: 5,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: color,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        label.toUpperCase(),
+                        style: TextStyle(
+                          fontSize: 9,
+                          fontWeight: FontWeight.w700,
+                          color: color,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 10),
+
+            // ── Main row: score left, character right ──
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                // Left: score + progress + advice
+                Expanded(
+                  flex: 5,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Plain English headline
+                      Text(
+                        _plainLabel,
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: color,
+                        ),
+                      ),
+
+                      const SizedBox(height: 4),
+
+                      // Big score
+                      _AnimatedAgiScore(score: _agiScore, color: color),
+
+                      Text(
+                        'out of 200',
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: isDark
+                              ? AppColors.darkSubtext
+                              : AppColors.lightSubtext,
+                        ),
+                      ),
+
+                      const SizedBox(height: 8),
+
+                      // Progress bar
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(4),
+                        child: TweenAnimationBuilder<double>(
+                          tween: Tween(begin: 0, end: _progressValue),
+                          duration: const Duration(milliseconds: 1000),
+                          curve: Curves.easeOut,
+                          builder: (_, value, __) => LinearProgressIndicator(
+                            value: value,
+                            minHeight: 6,
+                            backgroundColor: isDark
+                                ? AppColors.darkCardBorder
+                                : Colors.black.withValues(alpha: 0.08),
+                            valueColor: AlwaysStoppedAnimation(color),
+                          ),
+                        ),
+                      ),
+
+                      const SizedBox(height: 4),
+
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'Good',
+                            style: TextStyle(
+                              fontSize: 8,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.good,
+                            ),
+                          ),
+                          Text(
+                            'Hazardous',
+                            style: TextStyle(
+                              fontSize: 8,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.critical,
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      const SizedBox(height: 8),
+
+                      // Advice box
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 5,
+                        ),
+                        decoration: BoxDecoration(
+                          color: color.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          _advice,
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: color,
+                            fontWeight: FontWeight.w500,
+                            height: 1.4,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(width: 10),
+
+                // Right: Lottie character
+                Expanded(
+                  flex: 4,
+                  child: _lottiePath != null
+                      ? Lottie.asset(
+                          _lottiePath!,
+                          height: 140,
+                          fit: BoxFit.contain,
+                          repeat: true,
+                          animate: true,
+                        )
+                      : // Offline — static icon instead
+                        SizedBox(
+                          height: 140,
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.wifi_off,
+                                size: 48,
+                                color: AppColors.offline,
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                'Offline',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: AppColors.offline,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 12),
+
+            // ── AQI scale legend ───────────────────────
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: isDark
+                    ? Colors.black.withValues(alpha: 0.15)
+                    : Colors.black.withValues(alpha: 0.04),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
                   Text(
-                    label.toUpperCase(),
+                    'SAFE LIMITS GUIDE',
                     style: TextStyle(
-                      fontSize: 10,
+                      fontSize: 8,
                       fontWeight: FontWeight.w700,
-                      color: color,
+                      color: isDark
+                          ? AppColors.darkSubtext
+                          : AppColors.lightSubtext,
                       letterSpacing: 0.1,
                     ),
+                  ),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      _ScaleChip(
+                        label: 'Good',
+                        range: '0–50',
+                        color: AppColors.good,
+                        bgColor: AppColors.goodBg,
+                        isActive: aqiLevel == AirQualityLevel.good,
+                      ),
+                      const SizedBox(width: 4),
+                      _ScaleChip(
+                        label: 'Moderate',
+                        range: '51–100',
+                        color: AppColors.moderate,
+                        bgColor: AppColors.moderateBg,
+                        isActive: aqiLevel == AirQualityLevel.moderate,
+                      ),
+                      const SizedBox(width: 4),
+                      _ScaleChip(
+                        label: 'Warning',
+                        range: '101–150',
+                        color: AppColors.warning,
+                        bgColor: AppColors.warningBg,
+                        isActive: aqiLevel == AirQualityLevel.warning,
+                      ),
+                      const SizedBox(width: 4),
+                      _ScaleChip(
+                        label: 'Critical',
+                        range: '151+',
+                        color: AppColors.critical,
+                        bgColor: AppColors.criticalBg,
+                        isActive: aqiLevel == AirQualityLevel.critical,
+                      ),
+                    ],
                   ),
                 ],
               ),
             ),
 
-            const SizedBox(height: 6),
-
-            // Big AGI score
-            _AnimatedAgiScore(score: _agiScore, color: color),
-
-            Text(
-              'Air Guard Index',
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: isDark ? AppColors.darkSubtext : AppColors.lightSubtext,
-              ),
-            ),
-
-            const SizedBox(height: 6),
-
-            Text(
-              advice,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 11,
-                color: isDark ? AppColors.darkSubtext : AppColors.lightSubtext,
-              ),
-            ),
-
-            // Alert badge
+            // ── Alert badge ────────────────────────────
             if (alertCount > 0) ...[
               const SizedBox(height: 10),
               Container(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 14,
-                  vertical: 5,
+                  vertical: 6,
                 ),
                 decoration: BoxDecoration(
                   color: AppColors.criticalBg,
@@ -486,9 +748,9 @@ class _AgiCard extends StatelessWidget {
                     ),
                     const SizedBox(width: 5),
                     Text(
-                      '$alertCount ALERT${alertCount > 1 ? 'S' : ''}',
+                      '$alertCount ACTIVE ALERT${alertCount > 1 ? 'S' : ''} — TAP ALERTS TAB',
                       style: const TextStyle(
-                        fontSize: 11,
+                        fontSize: 10,
                         fontWeight: FontWeight.w700,
                         color: AppColors.critical,
                       ),
@@ -497,6 +759,62 @@ class _AgiCard extends StatelessWidget {
                 ),
               ),
             ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── AQI scale chip ────────────────────────────────────────────────────
+class _ScaleChip extends StatelessWidget {
+  final String label;
+  final String range;
+  final Color color;
+  final Color bgColor;
+  final bool isActive;
+
+  const _ScaleChip({
+    required this.label,
+    required this.range,
+    required this.color,
+    required this.bgColor,
+    required this.isActive,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 300),
+        padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 2),
+        decoration: BoxDecoration(
+          color: isActive ? bgColor : Colors.transparent,
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(
+            color: isActive ? color : Colors.transparent,
+            width: 1.5,
+          ),
+        ),
+        child: Column(
+          children: [
+            Text(
+              range,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 8,
+                fontWeight: FontWeight.w700,
+                color: isActive ? color : color.withValues(alpha: 0.5),
+              ),
+            ),
+            Text(
+              label,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 7,
+                color: isActive ? color : color.withValues(alpha: 0.5),
+              ),
+            ),
           ],
         ),
       ),
@@ -524,7 +842,7 @@ class _AnimatedAgiScoreState extends State<_AnimatedAgiScore>
     super.initState();
     _ctrl = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 800),
+      duration: const Duration(milliseconds: 900),
     );
     _anim = IntTween(
       begin: 0,
@@ -558,7 +876,7 @@ class _AnimatedAgiScoreState extends State<_AnimatedAgiScore>
       builder: (_, __) => Text(
         widget.score == 0 ? '--' : '${_anim.value}',
         style: TextStyle(
-          fontSize: 56,
+          fontSize: 48,
           fontWeight: FontWeight.w900,
           color: widget.color,
           fontFamily: 'monospace',
@@ -617,7 +935,7 @@ class _SensorCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header row
+            // ── Header: fullname big, sensorCode small ─
             Row(
               children: [
                 Expanded(
@@ -625,30 +943,29 @@ class _SensorCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
+                        sensor.fullName,
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: isDark
+                              ? AppColors.darkText
+                              : AppColors.lightText,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      Text(
                         sensor.sensorCode,
                         style: TextStyle(
-                          fontSize: 9,
-                          fontWeight: FontWeight.w700,
+                          fontSize: 8,
+                          fontWeight: FontWeight.w500,
                           color: isDark
                               ? AppColors.darkSubtext
                               : AppColors.lightSubtext,
-                          letterSpacing: 0.08,
                         ),
-                      ),
-                      Text(
-                        sensor.fullName,
-                        style: TextStyle(
-                          fontSize: 8,
-                          color: isDark
-                              ? AppColors.darkMuted
-                              : AppColors.lightMuted,
-                        ),
-                        overflow: TextOverflow.ellipsis,
                       ),
                     ],
                   ),
                 ),
-                // Status icon
                 sensor.isActive
                     ? Icon(
                         level == AirQualityLevel.good
@@ -669,7 +986,7 @@ class _SensorCard extends StatelessWidget {
 
             const SizedBox(height: 6),
 
-            // Value
+            // ── Value ──────────────────────────────────
             sensor.isActive
                 ? RichText(
                     text: TextSpan(
@@ -709,9 +1026,9 @@ class _SensorCard extends StatelessWidget {
                     ),
                   ),
 
-            const SizedBox(height: 4),
+            const SizedBox(height: 3),
 
-            // Worst 24h label
+            // ── Worst 24h ──────────────────────────────
             if (sensor.isActive && value != null)
               Consumer(
                 builder: (context, ref, _) {
@@ -721,7 +1038,7 @@ class _SensorCard extends StatelessWidget {
                   return Text(
                     worstVal != null
                         ? 'Worst (24h): ${worstVal.toStringAsFixed(1)}'
-                        : 'Loading...',
+                        : '',
                     style: TextStyle(
                       fontSize: 8,
                       color: isDark
@@ -742,7 +1059,7 @@ class _SensorCard extends StatelessWidget {
 
             const Spacer(),
 
-            // Sparkline or inactive line
+            // ── Sparkline ──────────────────────────────
             sensor.isActive
                 ? _Sparkline(sensorKey: sensor.key, color: color)
                 : Container(
@@ -763,7 +1080,7 @@ class _SensorCard extends StatelessWidget {
 
             const SizedBox(height: 4),
 
-            // Status label
+            // ── Status label ───────────────────────────
             Text(
               sensor.isActive
                   ? AirQualityHelper.getLabel(level).toUpperCase()
@@ -788,7 +1105,6 @@ class _SensorCard extends StatelessWidget {
 class _Sparkline extends ConsumerWidget {
   final String sensorKey;
   final Color color;
-
   const _Sparkline({required this.sensorKey, required this.color});
 
   @override
@@ -818,13 +1134,11 @@ class _Sparkline extends ConsumerWidget {
 class _SparklinePainter extends CustomPainter {
   final List<double> points;
   final Color color;
-
   _SparklinePainter({required this.points, required this.color});
 
   @override
   void paint(Canvas canvas, Size size) {
     if (points.length < 2) return;
-
     final min = points.reduce((a, b) => a < b ? a : b);
     final max = points.reduce((a, b) => a > b ? a : b);
     final range = (max - min).abs();

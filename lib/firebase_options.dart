@@ -46,7 +46,8 @@ class DefaultFirebaseOptions {
     messagingSenderId: '539403801786',
     projectId: 'air-guard-fyp',
     authDomain: 'air-guard-fyp.firebaseapp.com',
-    databaseURL: 'https://air-guard-fyp-default-rtdb.asia-southeast1.firebasedatabase.app',
+    databaseURL:
+        'https://air-guard-fyp-default-rtdb.asia-southeast1.firebasedatabase.app',
     storageBucket: 'air-guard-fyp.firebasestorage.app',
   );
 
@@ -55,7 +56,8 @@ class DefaultFirebaseOptions {
     appId: '1:539403801786:android:c9b61671a71618cdff1e83',
     messagingSenderId: '539403801786',
     projectId: 'air-guard-fyp',
-    databaseURL: 'https://air-guard-fyp-default-rtdb.asia-southeast1.firebasedatabase.app',
+    databaseURL:
+        'https://air-guard-fyp-default-rtdb.asia-southeast1.firebasedatabase.app',
     storageBucket: 'air-guard-fyp.firebasestorage.app',
   );
 
@@ -64,7 +66,8 @@ class DefaultFirebaseOptions {
     appId: '1:539403801786:ios:cd98c528ead7aef4ff1e83',
     messagingSenderId: '539403801786',
     projectId: 'air-guard-fyp',
-    databaseURL: 'https://air-guard-fyp-default-rtdb.asia-southeast1.firebasedatabase.app',
+    databaseURL:
+        'https://air-guard-fyp-default-rtdb.asia-southeast1.firebasedatabase.app',
     storageBucket: 'air-guard-fyp.firebasestorage.app',
     iosBundleId: 'com.example.airGuard',
   );
@@ -74,7 +77,8 @@ class DefaultFirebaseOptions {
     appId: '1:539403801786:ios:cd98c528ead7aef4ff1e83',
     messagingSenderId: '539403801786',
     projectId: 'air-guard-fyp',
-    databaseURL: 'https://air-guard-fyp-default-rtdb.asia-southeast1.firebasedatabase.app',
+    databaseURL:
+        'https://air-guard-fyp-default-rtdb.asia-southeast1.firebasedatabase.app',
     storageBucket: 'air-guard-fyp.firebasestorage.app',
     iosBundleId: 'com.example.airGuard',
   );
@@ -85,7 +89,8 @@ class DefaultFirebaseOptions {
     messagingSenderId: '539403801786',
     projectId: 'air-guard-fyp',
     authDomain: 'air-guard-fyp.firebaseapp.com',
-    databaseURL: 'https://air-guard-fyp-default-rtdb.asia-southeast1.firebasedatabase.app',
+    databaseURL:
+        'https://air-guard-fyp-default-rtdb.asia-southeast1.firebasedatabase.app',
     storageBucket: 'air-guard-fyp.firebasestorage.app',
   );
 }

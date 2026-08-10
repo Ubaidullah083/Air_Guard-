@@ -14,6 +14,7 @@ class MonitorScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final aqiLevel = ref.watch(globalAqiLevelProvider);
     final sensor = SensorConstants.byKey(sensorKey);
     if (sensor == null) {
       return const Scaffold(body: Center(child: Text('Sensor not found')));
@@ -61,13 +62,15 @@ class MonitorScreen extends ConsumerWidget {
       final olderAvg = older.isEmpty
           ? recentAvg
           : older.reduce((a, b) => a + b) / older.length;
-      if (recentAvg > olderAvg * 1.05)
+      if (recentAvg > olderAvg * 1.05) {
         trend = '↑ Rising';
-      else if (recentAvg < olderAvg * 0.95)
+      } else if (recentAvg < olderAvg * 0.95) {
         trend = '↓ Falling';
+      }
     }
 
     return AnimatedBackground(
+      aqiLevel: aqiLevel,
       child: Scaffold(
         backgroundColor: Colors.transparent,
         body: SafeArea(
@@ -500,7 +503,7 @@ class _ChartCard extends StatelessWidget {
                     barWidth: 2.5,
                     dotData: FlDotData(
                       show: spots.length <= 15,
-                      getDotPainter: (_, __, ___, ____) => FlDotCirclePainter(
+                      getDotPainter: (_, _, _, _) => FlDotCirclePainter(
                         radius: 3,
                         color: Colors.white,
                         strokeWidth: 1.5,

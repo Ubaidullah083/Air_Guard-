@@ -6,13 +6,14 @@ import '../../models/alert_model.dart';
 import '../../providers/alerts_provider.dart';
 import '../../providers/station_provider.dart';
 import '../../services/firebase_service.dart';
+import '../../services/alert_service.dart';
 
 class AlertsScreen extends ConsumerWidget {
   const AlertsScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final aqiLevel = ref.watch(globalAqiLevelProvider);
     final alertsAsync = ref.watch(allAlertsProvider);
     final filtered = ref.watch(filteredAlertsProvider);
     final stations = ref.watch(stationsProvider).value ?? [];
@@ -20,35 +21,176 @@ class AlertsScreen extends ConsumerWidget {
     final totalCount = ref.watch(alertCountProvider);
 
     return AnimatedBackground(
+      aqiLevel: aqiLevel,
       child: Scaffold(
         backgroundColor: Colors.transparent,
         body: SafeArea(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _AlertsHeader(
-                totalCount: totalCount,
-                stations: stations,
-                filterStation: filterStation,
-                isDark: isDark,
-                ref: ref,
+              // ── Header ─────────────────────────────────────────────
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'STATUS CENTER',
+                              style: TextStyle(
+                                fontSize: 9,
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFF1A3A52),
+                                letterSpacing: 0.1,
+                              ),
+                            ),
+                            Text(
+                              'Active Alerts',
+                              style: TextStyle(
+                                fontSize: 22,
+                                fontWeight: FontWeight.w800,
+                                color: Color(0xFF0A2540),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const Spacer(),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 5,
+                          ),
+                          decoration: BoxDecoration(
+                            color: totalCount > 0
+                                ? AppColors.criticalBg
+                                : Colors.white.withValues(alpha: 0.8),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                              color: totalCount > 0
+                                  ? AppColors.critical
+                                  : const Color(0xFFE2E8F0),
+                            ),
+                          ),
+                          child: Text(
+                            '$totalCount ITEM${totalCount != 1 ? 'S' : ''}',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                              color: totalCount > 0
+                                  ? AppColors.critical
+                                  : const Color(0xFF4A6880),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    const SizedBox(height: 4),
+
+                    const Text(
+                      'Real-time hazards detected across campus sensors.',
+                      style: TextStyle(fontSize: 11, color: Color(0xFF1A3A52)),
+                    ),
+
+                    const SizedBox(height: 10),
+
+                    // Legend row
+                    Row(
+                      children: [
+                        _dot('Advisory', AppColors.moderate),
+                        const SizedBox(width: 14),
+                        _dot('Warning', AppColors.warning),
+                        const SizedBox(width: 14),
+                        _dot('Critical', AppColors.critical),
+                      ],
+                    ),
+
+                    const SizedBox(height: 10),
+
+                    // Station filter chips
+                    if (stations.isNotEmpty)
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: [
+                            _chip('All', filterStation == null, () {
+                              ref
+                                      .read(alertStationFilterProvider.notifier)
+                                      .state =
+                                  null;
+                            }),
+                            ...stations.map(
+                              (s) => Padding(
+                                padding: const EdgeInsets.only(left: 6),
+                                child: _chip(s.name, filterStation == s.id, () {
+                                  ref
+                                      .read(alertStationFilterProvider.notifier)
+                                      .state = s
+                                      .id;
+                                }),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
               ),
+
+              // ── Alert list ──────────────────────────────────────────
               Expanded(
                 child: alertsAsync.when(
                   loading: () =>
                       const Center(child: CircularProgressIndicator()),
-                  error: (e, _) => Center(child: Text('Error: $e')),
+                  error: (e, _) => Center(
+                    child: Text(
+                      'Error: $e',
+                      style: const TextStyle(color: Color(0xFF0A2540)),
+                    ),
+                  ),
                   data: (_) {
                     if (filtered.isEmpty) {
-                      return _EmptyAlerts(isDark: isDark);
+                      return Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.check_circle_outline,
+                              size: 64,
+                              color: AppColors.good.withValues(alpha: 0.7),
+                            ),
+                            const SizedBox(height: 16),
+                            const Text(
+                              'Environment Stable',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFF0A2540),
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            const Text(
+                              'All sensors are within safe limits.',
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: Color(0xFF4A6880),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
                     }
+
                     return ListView.separated(
                       physics: const BouncingScrollPhysics(),
-                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                      padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
                       itemCount: filtered.length,
-                      separatorBuilder: (_, __) => const SizedBox(height: 8),
-                      itemBuilder: (_, i) =>
-                          _AlertCard(alert: filtered[i], isDark: isDark),
+                      separatorBuilder: (_, __) => const SizedBox(height: 10),
+                      itemBuilder: (_, i) => _Card(alert: filtered[i]),
                     );
                   },
                 ),
@@ -59,159 +201,11 @@ class AlertsScreen extends ConsumerWidget {
       ),
     );
   }
-}
 
-// ── Header ────────────────────────────────────────────────────────────
-class _AlertsHeader extends StatelessWidget {
-  final int totalCount;
-  final List<dynamic> stations;
-  final String? filterStation;
-  final bool isDark;
-  final WidgetRef ref;
-
-  const _AlertsHeader({
-    required this.totalCount,
-    required this.stations,
-    required this.filterStation,
-    required this.isDark,
-    required this.ref,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final textColor = isDark ? AppColors.darkText : AppColors.lightText;
-    final subColor = isDark ? AppColors.darkSubtext : AppColors.lightSubtext;
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Title row
-          Row(
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'STATUS CENTER',
-                    style: TextStyle(
-                      fontSize: 9,
-                      fontWeight: FontWeight.w700,
-                      color: subColor,
-                      letterSpacing: 0.1,
-                    ),
-                  ),
-                  Text(
-                    'Active Alerts',
-                    style: TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w800,
-                      color: textColor,
-                    ),
-                  ),
-                ],
-              ),
-              const Spacer(),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 5,
-                ),
-                decoration: BoxDecoration(
-                  color: totalCount > 0
-                      ? AppColors.criticalBg
-                      : (isDark
-                            ? AppColors.darkCard
-                            : Colors.white.withValues(alpha: 0.65)),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                    color: totalCount > 0
-                        ? AppColors.critical.withValues(alpha: 0.3)
-                        : (isDark
-                              ? AppColors.darkCardBorder
-                              : Colors.white.withValues(alpha: 0.9)),
-                  ),
-                ),
-                child: Text(
-                  '$totalCount ITEM${totalCount != 1 ? 'S' : ''}',
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                    color: totalCount > 0 ? AppColors.critical : subColor,
-                  ),
-                ),
-              ),
-            ],
-          ),
-
-          Text(
-            'Real-time hazards detected across campus sensors.',
-            style: TextStyle(fontSize: 11, color: subColor),
-          ),
-
-          const SizedBox(height: 10),
-
-          // Legend
-          Row(
-            children: [
-              _LegendDot('Advisory', AppColors.moderate, subColor),
-              const SizedBox(width: 12),
-              _LegendDot('Warning', AppColors.warning, subColor),
-              const SizedBox(width: 12),
-              _LegendDot('Critical', AppColors.critical, subColor),
-            ],
-          ),
-
-          const SizedBox(height: 10),
-
-          // Station filter chips
-          if (stations.isNotEmpty)
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  _FilterChip(
-                    label: 'All',
-                    isSelected: filterStation == null,
-                    isDark: isDark,
-                    onTap: () =>
-                        ref.read(alertStationFilterProvider.notifier).state =
-                            null,
-                  ),
-                  ...stations.map(
-                    (s) => Padding(
-                      padding: const EdgeInsets.only(left: 6),
-                      child: _FilterChip(
-                        label: s.name,
-                        isSelected: filterStation == s.id,
-                        isDark: isDark,
-                        onTap: () =>
-                            ref
-                                    .read(alertStationFilterProvider.notifier)
-                                    .state =
-                                s.id,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-class _LegendDot extends StatelessWidget {
-  final String label;
-  final Color color;
-  final Color textColor;
-  const _LegendDot(this.label, this.color, this.textColor);
-
-  @override
-  Widget build(BuildContext context) {
+  // ── Inline helpers so no separate class needed ──────────────────────
+  Widget _dot(String label, Color color) {
     return Row(
+      mainAxisSize: MainAxisSize.min,
       children: [
         Container(
           width: 7,
@@ -221,51 +215,28 @@ class _LegendDot extends StatelessWidget {
         const SizedBox(width: 4),
         Text(
           label,
-          style: TextStyle(
+          style: const TextStyle(
             fontSize: 9,
             fontWeight: FontWeight.w700,
-            color: textColor,
-            letterSpacing: 0.06,
+            color: Color(0xFF1A3A52),
           ),
         ),
       ],
     );
   }
-}
 
-class _FilterChip extends StatelessWidget {
-  final String label;
-  final bool isSelected;
-  final bool isDark;
-  final VoidCallback onTap;
-
-  const _FilterChip({
-    required this.label,
-    required this.isSelected,
-    required this.isDark,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
+  Widget _chip(String label, bool selected, VoidCallback onTap) {
     return GestureDetector(
       onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
-          color: isSelected
-              ? AppColors.lightText
-              : (isDark
-                    ? AppColors.darkCard
-                    : Colors.white.withValues(alpha: 0.65)),
+          color: selected
+              ? const Color(0xFF0A2540)
+              : Colors.white.withValues(alpha: 0.8),
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
-            color: isSelected
-                ? AppColors.lightText
-                : (isDark
-                      ? AppColors.darkCardBorder
-                      : Colors.white.withValues(alpha: 0.9)),
+            color: selected ? const Color(0xFF0A2540) : const Color(0xFFE2E8F0),
           ),
         ),
         child: Text(
@@ -273,9 +244,7 @@ class _FilterChip extends StatelessWidget {
           style: TextStyle(
             fontSize: 10,
             fontWeight: FontWeight.w700,
-            color: isSelected
-                ? Colors.white
-                : (isDark ? AppColors.darkSubtext : AppColors.lightSubtext),
+            color: selected ? Colors.white : const Color(0xFF4A6880),
           ),
         ),
       ),
@@ -283,36 +252,34 @@ class _FilterChip extends StatelessWidget {
   }
 }
 
-// ── Alert card ────────────────────────────────────────────────────────
-class _AlertCard extends StatelessWidget {
+// ── Alert card — completely standalone, zero dependency on theme ───────
+class _Card extends StatelessWidget {
   final AlertModel alert;
-  final bool isDark;
+  const _Card({required this.alert}); // ✅ no context field
 
-  const _AlertCard({required this.alert, required this.isDark});
-
-  Color get _borderColor {
+  Color get _border {
     switch (alert.level) {
       case AlertLevel.advisory:
-        return AppColors.moderate;
+        return const Color(0xFFD97706);
       case AlertLevel.warning:
-        return AppColors.warning;
+        return const Color(0xFFEA580C);
       case AlertLevel.critical:
-        return AppColors.critical;
+        return const Color(0xFFDC2626);
       case AlertLevel.sensorFailure:
-        return AppColors.offline;
+        return const Color(0xFF94A3B8);
     }
   }
 
   Color get _iconBg {
     switch (alert.level) {
       case AlertLevel.advisory:
-        return AppColors.moderateBg;
+        return const Color(0xFFFEF3C7);
       case AlertLevel.warning:
-        return AppColors.warningBg;
+        return const Color(0xFFFFF7ED);
       case AlertLevel.critical:
-        return AppColors.criticalBg;
+        return const Color(0xFFFEE2E2);
       case AlertLevel.sensorFailure:
-        return AppColors.offlineBg;
+        return const Color(0xFFF1F5F9);
     }
   }
 
@@ -330,147 +297,108 @@ class _AlertCard extends StatelessWidget {
   }
 
   String get _timeAgo {
-    final diff = DateTime.now().difference(alert.timestamp);
-    if (diff.inMinutes < 1) return 'Just now';
-    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
-    if (diff.inHours < 24) return '${diff.inHours}h ago';
-    return '${diff.inDays}d ago';
-  }
-
-  String get _actionLabel {
-    switch (alert.level) {
-      case AlertLevel.advisory:
-        return 'Dismiss';
-      case AlertLevel.warning:
-        return 'Investigate';
-      case AlertLevel.critical:
-        return 'Investigate';
-      case AlertLevel.sensorFailure:
-        return 'Reboot';
-    }
+    final d = DateTime.now().difference(alert.timestamp);
+    if (d.inMinutes < 1) return 'Just now';
+    if (d.inMinutes < 60) return '${d.inMinutes}m ago';
+    if (d.inHours < 24) return '${d.inHours}h ago';
+    return '${d.inDays}d ago';
   }
 
   @override
   Widget build(BuildContext context) {
+    // ✅ only one context
     return Container(
+      width: double.infinity,
       decoration: BoxDecoration(
-        color: isDark ? AppColors.darkCard : Colors.white,
+        color: Colors.white,
         borderRadius: const BorderRadius.only(
-          topRight: Radius.circular(12),
-          bottomRight: Radius.circular(12),
           topLeft: Radius.circular(3),
           bottomLeft: Radius.circular(3),
+          topRight: Radius.circular(14),
+          bottomRight: Radius.circular(14),
         ),
         border: Border(
-          left: BorderSide(color: _borderColor, width: 4),
-          top: BorderSide(
-            color: isDark
-                ? AppColors.darkCardBorder
-                : AppColors.lightCardBorder,
-          ),
-          right: BorderSide(
-            color: isDark
-                ? AppColors.darkCardBorder
-                : AppColors.lightCardBorder,
-          ),
-          bottom: BorderSide(
-            color: isDark
-                ? AppColors.darkCardBorder
-                : AppColors.lightCardBorder,
-          ),
+          left: BorderSide(color: _border, width: 5),
+          top: const BorderSide(color: Color(0xFFE2E8F0)),
+          right: const BorderSide(color: Color(0xFFE2E8F0)),
+          bottom: const BorderSide(color: Color(0xFFE2E8F0)),
         ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.07),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Warning icon
-              Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: _iconBg,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Icon(
-                  Icons.warning_amber_rounded,
-                  color: _borderColor,
-                  size: 20,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '${alert.parameter} ${_levelLabel}',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        color: isDark
-                            ? AppColors.darkText
-                            : AppColors.lightText,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      alert.message,
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: isDark
-                            ? AppColors.darkSubtext
-                            : AppColors.lightSubtext,
-                      ),
-                    ),
-                    const SizedBox(height: 5),
-                    Text(
-                      '${_timeAgo.toUpperCase()} · REPORTED BY ${alert.sensorCode}',
-                      style: TextStyle(
-                        fontSize: 8,
-                        fontWeight: FontWeight.w700,
-                        color: isDark
-                            ? AppColors.darkMuted
-                            : AppColors.lightMuted,
-                        letterSpacing: 0.08,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
+          Text(
+            '${alert.parameter} — $_levelLabel',
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF0A2540),
+            ),
           ),
 
+          const SizedBox(height: 6),
+
+          Text(
+            alert.message.isNotEmpty
+                ? alert.message
+                : 'Reading exceeded threshold',
+            style: const TextStyle(
+              fontSize: 12,
+              color: Color(0xFF4A6880),
+              height: 1.4,
+            ),
+          ),
+
+          const SizedBox(height: 6),
+
+          Text(
+            '${_timeAgo.toUpperCase()} · REPORTED BY ${alert.sensorCode}',
+            style: const TextStyle(
+              fontSize: 9,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF6A8FA8),
+              letterSpacing: 0.08,
+            ),
+          ),
+
+          const SizedBox(height: 12),
+          const Divider(color: Color(0xFFF1F5F9), height: 1),
           const SizedBox(height: 10),
 
           Row(
             children: [
-              // Station location chip
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: isDark ? AppColors.darkCard : AppColors.lightInput,
+                  color: const Color(0xFFEEF4FF),
                   borderRadius: BorderRadius.circular(6),
-                  border: Border.all(
-                    color: isDark
-                        ? AppColors.darkCardBorder
-                        : AppColors.lightInputBorder,
-                  ),
+                  border: Border.all(color: const Color(0xFFD0E0FF)),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.location_on, size: 10, color: AppColors.primary),
+                    const Icon(
+                      Icons.location_on,
+                      size: 11,
+                      color: Color(0xFF1565C0),
+                    ),
                     const SizedBox(width: 3),
                     Text(
-                      alert.stationName,
-                      style: TextStyle(
-                        fontSize: 9,
+                      alert.stationName.isNotEmpty
+                          ? alert.stationName
+                          : alert.stationId,
+                      style: const TextStyle(
+                        fontSize: 10,
                         fontWeight: FontWeight.w700,
-                        color: AppColors.primary,
+                        color: Color(0xFF1565C0),
                       ),
                     ),
                   ],
@@ -479,32 +407,36 @@ class _AlertCard extends StatelessWidget {
 
               const Spacer(),
 
-              // Dismiss button
               GestureDetector(
-                onTap: () => FirebaseService.instance.resolveAlert(alert.id),
+                onTap: () {
+                  AlertService.instance.clearActiveAlert(
+                    alert.stationId,
+                    alert.sensorKey,
+                  );
+                  FirebaseService.instance.resolveAlert(alert.id);
+                },
                 child: Container(
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 5,
+                    horizontal: 12,
+                    vertical: 6,
                   ),
                   decoration: BoxDecoration(
-                    color: AppColors.criticalBg,
-                    borderRadius: BorderRadius.circular(6),
+                    color: const Color(0xFFFEE2E2),
+                    borderRadius: BorderRadius.circular(8),
                   ),
                   child: const Text(
                     'Dismiss',
                     style: TextStyle(
-                      fontSize: 10,
+                      fontSize: 11,
                       fontWeight: FontWeight.w700,
-                      color: AppColors.critical,
+                      color: Color(0xFFDC2626),
                     ),
                   ),
                 ),
               ),
 
-              const SizedBox(width: 6),
+              const SizedBox(width: 8),
 
-              // Action button
               GestureDetector(
                 onTap: () {
                   if (alert.level == AlertLevel.sensorFailure) {
@@ -516,73 +448,38 @@ class _AlertCard extends StatelessWidget {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                       content: Text(
-                        '${_actionLabel}ing ${alert.stationName}...',
+                        alert.level == AlertLevel.sensorFailure
+                            ? 'Reboot sent to ${alert.stationName}'
+                            : 'Investigating ${alert.stationName}...',
                       ),
                       behavior: SnackBarBehavior.floating,
-                      backgroundColor: AppColors.primary,
+                      backgroundColor: const Color(0xFF1565C0),
                       duration: const Duration(seconds: 2),
                     ),
                   );
                 },
                 child: Container(
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 5,
+                    horizontal: 12,
+                    vertical: 6,
                   ),
                   decoration: BoxDecoration(
-                    color: AppColors.primary.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(6),
+                    color: const Color(0xFFEEF4FF),
+                    borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
-                    _actionLabel,
+                    alert.level == AlertLevel.sensorFailure
+                        ? 'Reboot'
+                        : 'Investigate',
                     style: const TextStyle(
-                      fontSize: 10,
+                      fontSize: 11,
                       fontWeight: FontWeight.w700,
-                      color: AppColors.primary,
+                      color: Color(0xFF1565C0),
                     ),
                   ),
                 ),
               ),
             ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ── Empty alerts ──────────────────────────────────────────────────────
-class _EmptyAlerts extends StatelessWidget {
-  final bool isDark;
-  const _EmptyAlerts({required this.isDark});
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            Icons.check_circle_outline,
-            size: 64,
-            color: AppColors.good.withValues(alpha: 0.7),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            'Environment Stable',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w700,
-              color: isDark ? AppColors.darkText : AppColors.lightText,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'All sensors are within safe limits.',
-            style: TextStyle(
-              fontSize: 13,
-              color: isDark ? AppColors.darkSubtext : AppColors.lightSubtext,
-            ),
           ),
         ],
       ),

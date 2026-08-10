@@ -44,13 +44,29 @@ class AlertModel {
         orElse: () => AlertLevel.advisory,
       ),
       message: map['message']?.toString() ?? '',
-      timestamp: map['timestamp'] != null
-          ? DateTime.fromMillisecondsSinceEpoch(
-              int.tryParse(map['timestamp'].toString()) ?? 0,
-            )
-          : DateTime.now(),
+      timestamp: _parseTimestamp(map['timestamp']),
       resolved: map['resolved'] == true,
     );
+  }
+
+  // Parse timestamp safely.
+  static DateTime _parseTimestamp(dynamic raw) {
+    if (raw == null) {
+      return DateTime.now();
+    }
+
+    final ms = int.tryParse(raw.toString()) ?? 0;
+
+    // If the value is less than January 1, 2000
+    // in milliseconds, treat it as uptime/invalid
+    // rather than a Unix epoch timestamp.
+    const year2000 = 946684800000;
+
+    if (ms < year2000) {
+      return DateTime.now();
+    }
+
+    return DateTime.fromMillisecondsSinceEpoch(ms);
   }
 
   Map<String, dynamic> toMap() => {

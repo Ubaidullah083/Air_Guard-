@@ -23,8 +23,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   @override
   void dispose() {
-    for (final c in _elevatedCtrls.values) c.dispose();
-    for (final c in _criticalCtrls.values) c.dispose();
+    for (final c in _elevatedCtrls.values) {
+      c.dispose();
+    }
+    for (final c in _criticalCtrls.values) {
+      c.dispose();
+    }
     super.dispose();
   }
 
@@ -77,6 +81,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final aqiLevel = ref.watch(globalAqiLevelProvider);
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final themeMode = ref.watch(themeModeProvider);
     final stationAsync = ref.watch(selectedStationProvider);
@@ -95,6 +100,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         : Colors.white.withValues(alpha: 0.9);
 
     return AnimatedBackground(
+      aqiLevel: aqiLevel,
       child: Scaffold(
         backgroundColor: Colors.transparent,
         body: SafeArea(
@@ -389,8 +395,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   padding: const EdgeInsets.fromLTRB(16, 24, 16, 32),
                   child: Center(
                     child: Text(
-                      'Air Guard · ESP32-WROOM-32 · v1.0.0\n'
-                      'Designed and powered by COMSATS',
+                      'Air Guard · ESP32-WROOM-32 · v1.0.0\n',
                       textAlign: TextAlign.center,
                       style: TextStyle(fontSize: 10, color: subColor),
                     ),

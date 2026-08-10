@@ -56,6 +56,7 @@ class MainShell extends ConsumerWidget {
     if (location.startsWith('/settings')) currentIndex = 2;
 
     return Scaffold(
+      backgroundColor: Colors.transparent,
       body: child,
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: currentIndex,
