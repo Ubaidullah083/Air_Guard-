@@ -8,6 +8,25 @@
   "client": [
     {
       "client_info": {
+        "mobilesdk_app_id": "1:539403801786:android:2a07d4706b658c15ff1e83",
+        "android_client_info": {
+          "package_name": "com.airguard.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyABIawS80KdQUYp614qhbkdAnOtvw4oBuA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
         "mobilesdk_app_id": "1:539403801786:android:c9b61671a71618cdff1e83",
         "android_client_info": {
           "package_name": "com.example.air_guard"
